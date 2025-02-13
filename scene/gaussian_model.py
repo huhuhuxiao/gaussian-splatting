@@ -27,6 +27,20 @@ try:
 except:
     pass
 
+'''
+self.scaling_activation = torch.exp：这行代码将指数函数 torch.exp 赋值给了 self.scaling_activation。这意味着在网络中，会使用指数函数作为缩放操作的激活函数。
+
+self.scaling_inverse_activation = torch.log：这行代码将对数函数 torch.log 赋值给了 self.scaling_inverse_activation。这表示在网络中，会使用对数函数作为缩放的逆操作的激活函数。
+
+self.covariance_activation = build_covariance_from_scaling_rotation：这行代码将一个函数 build_covariance_from_scaling_rotation 赋值给了 self.covariance_activation。这可能是一个自定义的函数，用于构建协方差矩阵，该函数可能会使用了缩放和旋转操作。
+
+self.opacity_activation = torch.sigmoid：这行代码将 sigmoid 函数 torch.sigmoid 赋值给了 self.opacity_activation。这表示在网络中，会使用 sigmoid 函数作为不透明度的激活函数。
+
+self.inverse_opacity_activation = inverse_sigmoid：这行代码将一个函数 inverse_sigmoid 赋值给了 self.inverse_opacity_activation。这可能是一个自定义的函数，用于计算 sigmoid 函数的逆操作。
+
+self.rotation_activation = torch.nn.functional.normalize：这行代码将归一化函数 torch.nn.functional.normalize 赋值给了 self.rotation_activation。这表示在网络中，会使用归一化函数作为旋转操作的激活函数。
+'''
+
 class GaussianModel:
 
     def setup_functions(self):
@@ -155,14 +169,21 @@ class GaussianModel:
         features[:, 3:, 1:] = 0.0
 
         print("Number of points at initialisation : ", fused_point_cloud.shape[0])
+   # 计算点云中每个点与原点的欧氏距离的平方，并将其限制在一个最小值以上，以避免出现除以零的情况
+    # '''
+    # 这行代码使用了函数 distCUDA2 来计算点云中每个点之间的距离，并将结果存储在 dist2 变量中。
+	# torch.from_numpy(np.asarray(pcd.points)).float().cuda() 将点云数据转换为 PyTorch 张量，并将其移到 GPU 上。
+	# torch.clamp_min 函数用于将 dist2 中的所有元素的最小值限制为 0.0000001，以确保不会出现零距离。	
+    # '''
 
         dist2 = torch.clamp_min(distCUDA2(torch.from_numpy(np.asarray(pcd.points)).float().cuda()), 0.0000001)
         scales = torch.log(torch.sqrt(dist2))[...,None].repeat(1, 3)
         rots = torch.zeros((fused_point_cloud.shape[0], 4), device="cuda")
-        rots[:, 0] = 1
+        rots[:, 0] = 1# 旋转四元数的第一个分量为 1，其余分量为 0
 
         opacities = self.inverse_opacity_activation(0.1 * torch.ones((fused_point_cloud.shape[0], 1), dtype=torch.float, device="cuda"))
 
+# set these parameters as nn.Parameters, which are trainable
         self._xyz = nn.Parameter(fused_point_cloud.requires_grad_(True))
         self._features_dc = nn.Parameter(features[:,:,0:1].transpose(1, 2).contiguous().requires_grad_(True))
         self._features_rest = nn.Parameter(features[:,:,1:].transpose(1, 2).contiguous().requires_grad_(True))
@@ -224,9 +245,12 @@ class GaussianModel:
 
     def construct_list_of_attributes(self):
         l = ['x', 'y', 'z', 'nx', 'ny', 'nz']
+        # 初始化一个列表 l，包含一些固定的属性名称：'x', 'y', 'z' 表示点的坐标，'nx', 'ny', 'nz' 表示法线的分量
         # All channels except the 3 DC
+        # 遍历 _features_dc 的通道和特征维度，生成特征属性名称 'f_dc_0', 'f_dc_1', 'f_dc_2'
         for i in range(self._features_dc.shape[1]*self._features_dc.shape[2]):
             l.append('f_dc_{}'.format(i))
+        # 遍历 _features_rest 的通道和特征维度，生成特征属性名称 'f_rest_0', 'f_rest_1', 'f_rest_2'
         for i in range(self._features_rest.shape[1]*self._features_rest.shape[2]):
             l.append('f_rest_{}'.format(i))
         l.append('opacity')
@@ -256,6 +280,12 @@ class GaussianModel:
         PlyData([el]).write(path)
 
     def reset_opacity(self):
+    # '''
+	# 获取当前透明度张量self.get_opacity。
+	# 将所有透明度值限制在不超过0.01。
+	# 对限制后的透明度值应用反Sigmoid函数。
+	# 将新的透明度张量opacities_new替换到优化器中，并更新对象的透明度属性self._opacity。
+	# '''
         opacities_new = self.inverse_opacity_activation(torch.min(self.get_opacity, torch.ones_like(self.get_opacity)*0.01))
         optimizable_tensors = self.replace_tensor_to_optimizer(opacities_new, "opacity")
         self._opacity = optimizable_tensors["opacity"]
@@ -347,7 +377,8 @@ class GaussianModel:
         return optimizable_tensors
 
     def prune_points(self, mask):
-        valid_points_mask = ~mask
+        valid_points_mask = ~mask #not mask, to get the valid points
+        # using _prune_optimizer to update the optimizer
         optimizable_tensors = self._prune_optimizer(valid_points_mask)
 
         self._xyz = optimizable_tensors["xyz"]
