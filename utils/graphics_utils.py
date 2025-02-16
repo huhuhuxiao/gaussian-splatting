@@ -38,8 +38,8 @@ def getWorld2View(R, t):
 def getWorld2View2(R, t, translate=np.array([.0, .0, .0]), scale=1.0):
     Rt = np.zeros((4, 4))
     Rt[:3, :3] = R.transpose()
-    Rt[:3, 3] = t
-    Rt[3, 3] = 1.0
+    Rt[:3, 3] = t# translate vector
+    Rt[3, 3] = 1.0# 
 
     C2W = np.linalg.inv(Rt)
     cam_center = C2W[:3, 3]
@@ -49,6 +49,7 @@ def getWorld2View2(R, t, translate=np.array([.0, .0, .0]), scale=1.0):
     return np.float32(Rt)
 
 def getProjectionMatrix(znear, zfar, fovX, fovY):
+    #投影矩阵用于将三维坐标变换为二维屏幕坐标。这通常涉及将相机坐标系中的点投影到一个称为规范化设备坐标（NDC）系的空间中，然后再映射到屏幕坐标系。
     tanHalfFovY = math.tan((fovY / 2))
     tanHalfFovX = math.tan((fovX / 2))
 

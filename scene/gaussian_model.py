@@ -393,7 +393,9 @@ class GaussianModel:
         self.denom = self.denom[valid_points_mask]
         self.max_radii2D = self.max_radii2D[valid_points_mask]
         self.tmp_radii = self.tmp_radii[valid_points_mask]
-
+# 简单补充一下 cat_tensors_to_optimizer 包括 replace_tensor_to_optimizer 这两个函数里对adam optimizer state dict的操作：
+# 主要就是扩容或者代替所要优化的参数(xyz, scaling, rotation 等等) ；
+# 但同时也手动补齐各个参数所对应的优化器状态(exp_avg, exp_avg_sq)，参考Adam Optimizer 
     def cat_tensors_to_optimizer(self, tensors_dict):
         optimizable_tensors = {}
         for group in self.optimizer.param_groups:
